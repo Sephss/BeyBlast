@@ -437,7 +437,11 @@ body::before {
   font-weight: 700;
   letter-spacing: 0.05em;
 }
-
+.badge--cyan {
+  background: var(--cyan-faint);
+  color: var(--cyan);
+  border: 1px solid var(--cyan-dim);
+}
 .badge--pink {
   background: var(--pink-faint);
   color: var(--pink);
