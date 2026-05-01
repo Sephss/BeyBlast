@@ -1,139 +1,186 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BeyBlast — Event</title>
-  <link rel="stylesheet" href="css/style.css" />
-</head>
-<body>
-  <div class="arena-ring"></div>
-  <nav class="nav" id="main-nav"></nav>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeyBlast — Event</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="arena-ring"></div>
+    <nav class="nav" id="main-nav"></nav>
 
-  <div class="page-wrap">
-    <a href="events.html" class="back-link">← Back to Events</a>
-    <div id="event-content">
-      <div class="empty-state"><div class="bb-spinner" style="margin:0 auto;"></div></div>
+    <div class="page-wrap">
+      <a href="events.html" class="back-link">← Back to Events</a>
+      <div id="event-content">
+        <div class="empty-state">
+          <div class="bb-spinner" style="margin: 0 auto"></div>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <script type="module">
-    import { requireAuth } from "./js/auth.js";
-    import { renderNav } from "./js/nav.js";
-    import { getEvent, getEventParticipants, joinEvent, leaveEvent, deleteEvent } from "./js/events.js";
-    import { getMultipleUsers, getUserProfile } from "./js/profile.js";
-    import { getTeam } from "./js/teams.js";
-    import { showToast, showConfirm, escHtml, formatDateTime, avatarFallback } from "./js/ui.js";
-    import { getParam } from "./js/helpers.js";
+    <script type="module">
+      import { requireAuth } from "./js/auth.js";
+      import { renderNav } from "./js/nav.js";
+      import {
+        getEvent,
+        getEventParticipants,
+        joinEvent,
+        leaveEvent,
+        deleteEvent,
+      } from "./js/events.js";
+      import { getMultipleUsers, getUserProfile } from "./js/profile.js";
+      import { getTeam } from "./js/teams.js";
+      import {
+        showToast,
+        showConfirm,
+        escHtml,
+        formatDateTime,
+        avatarFallback,
+      } from "./js/ui.js";
+      import { getParam } from "./js/helpers.js";
 
-    const user = await requireAuth();
-    await renderNav("events");
+      const user = await requireAuth();
+      await renderNav("events");
 
-    const eventId = getParam("id");
-    if (!eventId) { window.location.href = "events.html"; }
-
-    async function render() {
-      const ev = await getEvent(eventId);
-      if (!ev) { window.location.href = "events.html"; return; }
-
-      const participants = await getEventParticipants(eventId);
-      const uids = participants.map(p => p.uid);
-      const usersMap = await getMultipleUsers(uids);
-      const joined = uids.includes(user.uid);
-      const isCreator = ev.createdBy === user.uid;
-      const isFull = ev.maxParticipants > 0 && participants.length >= ev.maxParticipants;
-      const now = new Date().toISOString().split("T")[0];
-      const isPast = ev.date < now;
-
-      let teamName = "";
-      if (ev.teamId) {
-        const team = await getTeam(ev.teamId).catch(() => null);
-        teamName = team ? team.name : "";
+      const eventId = getParam("id");
+      if (!eventId) {
+        window.location.href = "events.html";
       }
 
-      let creatorName = "";
-      const creatorProfile = await getUserProfile(ev.createdBy).catch(() => null);
-      creatorName = creatorProfile?.name || "Unknown";
+      async function render() {
+        const ev = await getEvent(eventId);
+        if (!ev) {
+          window.location.href = "events.html";
+          return;
+        }
 
-      document.title = `BeyBlast — ${ev.title}`;
-      document.getElementById("event-content").innerHTML = `
+        const participants = await getEventParticipants(eventId);
+        const uids = participants.map((p) => p.uid);
+        const usersMap = await getMultipleUsers(uids);
+        const joined = uids.includes(user.uid);
+        const isCreator = ev.createdBy === user.uid;
+        const isFull =
+          ev.maxParticipants > 0 && participants.length >= ev.maxParticipants;
+        const now = new Date().toISOString().split("T")[0];
+        const isPast = ev.date < now;
+
+        let teamName = "";
+        if (ev.teamId) {
+          const team = await getTeam(ev.teamId).catch(() => null);
+          teamName = team ? team.name : "";
+        }
+
+        let creatorName = "";
+        const creatorProfile = await getUserProfile(ev.createdBy).catch(
+          () => null,
+        );
+        creatorName = creatorProfile?.name || "Unknown";
+
+        document.title = `BeyBlast — ${ev.title}`;
+        document.getElementById("event-content").innerHTML = `
         <div class="detail-hero">
           <div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;">
             ${isPast ? '<span class="badge badge--pink">Past</span>' : '<span class="badge badge--cyan">Upcoming</span>'}
-            ${teamName ? `<a href="team-details.html?id=${ev.teamId}" class="badge badge--gold">⬢ ${escHtml(teamName)}</a>` : ''}
+            ${teamName ? `<a href="team-details.html?id=${ev.teamId}" class="badge badge--gold">⬢ ${escHtml(teamName)}</a>` : ""}
           </div>
           <div class="detail-hero__title">${escHtml(ev.title)}</div>
           <div class="detail-hero__meta">
-            <span>📅 ${ev.date}${ev.time?' at '+ev.time:''}</span>
-            ${ev.location?`<span>📍 ${escHtml(ev.location)}</span>`:''}
-            <span>👥 ${participants.length}${ev.maxParticipants?' / '+ev.maxParticipants:''} participants</span>
+            <span>📅 ${ev.date}${ev.time ? " at " + ev.time : ""}</span>
+            ${ev.location ? `<span>📍 ${escHtml(ev.location)}</span>` : ""}
+            <span>👥 ${participants.length}${ev.maxParticipants ? " / " + ev.maxParticipants : ""} participants</span>
             <span>🔧 By ${escHtml(creatorName)}</span>
           </div>
-          ${ev.description?`<div class="detail-hero__desc">${escHtml(ev.description)}</div>`:''}
+          ${ev.description ? `<div class="detail-hero__desc">${escHtml(ev.description)}</div>` : ""}
           <div class="detail-hero__actions">
-            ${!isPast && !joined && !isFull ? `<button class="btn btn--primary" id="btn-join">⚡ Join Event</button>` : ''}
-            ${!isPast && joined && !isCreator ? `<button class="btn btn--ghost" id="btn-leave">Leave Event</button>` : ''}
-            ${joined && !isPast ? `<span class="badge badge--cyan">✦ Joined</span>` : ''}
-            ${isFull && !joined ? `<span class="badge badge--pink">Full</span>` : ''}
-            ${isCreator ? `
+            ${!isPast && !joined && !isFull ? `<button class="btn btn--primary" id="btn-join">Join Event</button>` : ""}
+            ${!isPast && joined && !isCreator ? `<button class="btn btn--ghost" id="btn-leave">Leave Event</button>` : ""}
+            ${joined && !isPast ? `<span class="badge badge--cyan">Joined</span>` : ""}
+            ${isFull && !joined ? `<span class="badge badge--pink">Full</span>` : ""}
+            ${
+              isCreator
+                ? `
               <a href="events.html" class="btn btn--ghost btn--sm">Edit (on Events page)</a>
               <button class="btn btn--danger btn--sm" id="btn-delete-ev">Delete</button>
-            ` : ''}
+            `
+                : ""
+            }
           </div>
         </div>
 
         <div class="section">
           <div class="section-title">👥 Participants (${participants.length})</div>
-          ${participants.length === 0
-            ? `<div class="empty-state"><div class="empty-state__title">No participants yet</div></div>`
-            : `<div class="member-list">
-              ${participants.map(p => {
-                const u = usersMap[p.uid] || {};
-                const photo = u.photo || avatarFallback(u.name || "?");
-                return `<div class="member-item">
-                  <img src="${photo}" class="avatar avatar--sm" alt="${escHtml(u.name||'?')}" onerror="this.src='${avatarFallback(u.name||'?')}'" />
+          ${
+            participants.length === 0
+              ? `<div class="empty-state"><div class="empty-state__title">No participants yet</div></div>`
+              : `<div class="member-list">
+              ${participants
+                .map((p) => {
+                  const u = usersMap[p.uid] || {};
+                  const photo = u.photo || avatarFallback(u.name || "?");
+                  return `<div class="member-item">
+                  <img src="${photo}" class="avatar avatar--sm" alt="${escHtml(u.name || "?")}" onerror="this.src='${avatarFallback(u.name || "?")}'" />
                   <div>
-                    <div class="member-item__name">${escHtml(u.name||'Unknown')}</div>
-                    <div class="member-item__email">${escHtml(u.email||'')}</div>
+                    <div class="member-item__name">${escHtml(u.name || "Unknown")}</div>
+                    <div class="member-item__email">${escHtml(u.email || "")}</div>
                   </div>
-                  ${ev.createdBy === p.uid ? '<span class="badge badge--gold" style="margin-left:auto;">Creator</span>' : ''}
+                  ${ev.createdBy === p.uid ? '<span class="badge badge--gold" style="margin-left:auto;">Creator</span>' : ""}
                 </div>`;
-              }).join('')}
+                })
+                .join("")}
             </div>`
           }
         </div>
       `;
 
-      document.getElementById("btn-join")?.addEventListener("click", async () => {
-        try {
-          await joinEvent(eventId, user.uid);
-          showToast("Joined event!", "success");
-          await render();
-        } catch (e) { showToast(e.message, "error"); }
-      });
+        document
+          .getElementById("btn-join")
+          ?.addEventListener("click", async () => {
+            try {
+              await joinEvent(eventId, user.uid);
+              showToast("Joined event!", "success");
+              await render();
+            } catch (e) {
+              showToast(e.message, "error");
+            }
+          });
 
-      document.getElementById("btn-leave")?.addEventListener("click", () => {
-        showConfirm("Leave Event", "Are you sure you want to leave this event?", async () => {
-          try {
-            await leaveEvent(eventId, user.uid);
-            showToast("Left event.", "success");
-            await render();
-          } catch (e) { showToast(e.message, "error"); }
+        document.getElementById("btn-leave")?.addEventListener("click", () => {
+          showConfirm(
+            "Leave Event",
+            "Are you sure you want to leave this event?",
+            async () => {
+              try {
+                await leaveEvent(eventId, user.uid);
+                showToast("Left event.", "success");
+                await render();
+              } catch (e) {
+                showToast(e.message, "error");
+              }
+            },
+          );
         });
-      });
 
-      document.getElementById("btn-delete-ev")?.addEventListener("click", () => {
-        showConfirm("Delete Event", "Delete this event permanently?", async () => {
-          try {
-            await deleteEvent(eventId);
-            showToast("Event deleted.", "success");
-            window.location.href = "events.html";
-          } catch (e) { showToast(e.message, "error"); }
-        });
-      });
-    }
+        document
+          .getElementById("btn-delete-ev")
+          ?.addEventListener("click", () => {
+            showConfirm(
+              "Delete Event",
+              "Delete this event permanently?",
+              async () => {
+                try {
+                  await deleteEvent(eventId);
+                  showToast("Event deleted.", "success");
+                  window.location.href = "events.html";
+                } catch (e) {
+                  showToast(e.message, "error");
+                }
+              },
+            );
+          });
+      }
 
-    await render();
-  </script>
-</body>
+      await render();
+    </script>
+  </body>
 </html>
