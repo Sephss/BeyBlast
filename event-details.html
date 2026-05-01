@@ -95,7 +95,7 @@
           <div class="detail-hero__actions">
             ${!isPast && !joined && !isFull ? `<button class="btn btn--primary" id="btn-join">Join Event</button>` : ""}
             ${!isPast && joined && !isCreator ? `<button class="btn btn--ghost" id="btn-leave">Leave Event</button>` : ""}
-            ${joined && !isPast ? `<span class="badge badge--cyan">Joined</span>` : ""}
+            ${joined && !isPast ? `<span class="badge badge--cyan">Join</span>` : ""}
             ${isFull && !joined ? `<span class="badge badge--pink">Full</span>` : ""}
             ${
               isCreator
