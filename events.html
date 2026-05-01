@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeyBlast — Events</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="arena-ring"></div>
+    <nav class="nav" id="main-nav"></nav>
+
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">◈ BATTLE <span>EVENTS</span></div>
+          <div class="page-sub">Join or create Beyblade tournaments</div>
+        </div>
+        <button class="btn btn--primary" id="btn-create-event">
+          + Create Event
+        </button>
+      </div>
+
+      <div class="filter-row">
+        <div class="search-bar" style="max-width: 340px">
+          <span class="search-bar__icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Search events..."
+            id="search-events"
+          />
+        </div>
+        <select class="form-select" style="max-width: 160px" id="filter-time">
+          <option value="all">All Events</option>
+          <option value="upcoming">Upcoming</option>
+          <option value="past">Past</option>
+        </select>
+      </div>
+
+      <div class="grid grid--2" id="events-grid">
+        <div class="empty-state">
+          <div class="bb-spinner" style="margin: 0 auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create / Edit Event Modal -->
+    <div class="form-modal" id="event-modal">
+      <div class="form-modal__box">
+        <button class="form-modal__close" id="event-modal-close">✕</button>
+        <div class="form-modal__title" id="event-modal-title">
+          ◈ CREATE EVENT
+        </div>
+        <div class="form-group">
+          <label class="form-label">Title *</label>
+          <input
+            type="text"
+            class="form-input"
+            id="ev-title"
+            placeholder="Grand Tournament..."
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea
+            class="form-textarea"
+            id="ev-desc"
+            placeholder="Event details..."
+          ></textarea>
+        </div>
+        <div
+          style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem"
+        >
+          <div class="form-group">
+            <label class="form-label">Date *</label>
+            <input type="date" class="form-input" id="ev-date" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Time</label>
+            <input type="time" class="form-input" id="ev-time" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Location</label>
+          <input
+            type="text"
+            class="form-input"
+            id="ev-location"
+            placeholder="Arena, City..."
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Participants (0 = unlimited)</label>
+          <input
+            type="number"
+            class="form-input"
+            id="ev-max"
+            min="0"
+            value="0"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Link to Team (optional)</label>
+          <select class="form-select" id="ev-team">
+            <option value="">— No team —</option>
+          </select>
+        </div>
+        <button class="btn btn--primary btn--full" id="btn-save-event">
+          Save Event
+        </button>
+      </div>
+    </div>
+
+    <script type="module">
+      import { requireAuth } from "./js/auth.js";
+      import { renderNav } from "./js/nav.js";
+      import {
+        getAllEvents,
+        createEvent,
+        updateEvent,
+        deleteEvent,
+      } from "./js/events.js";
+      import { getUserTeams } from "./js/teams.js";
+      import {
+        showToast,
+        showConfirm,
+        escHtml,
+        truncate,
+        formatDateTime,
+      } from "./js/ui.js";
+      import { debounce, required } from "./js/helpers.js";
+
+      window.addEventListener("unhandledrejection", (e) => {
+        console.error("Unhandled promise rejection:", e.reason);
+        showToast("Error: " + (e.reason?.message || "Unknown error"), "error");
+      });
+
+      const user = await requireAuth();
+      await renderNav("events");
+
+      let allEvents = [];
+      let editingId = null;
+
+      async function loadEvents() {
+        allEvents = await getAllEvents();
+        renderEvents();
+      }
+
+      function renderEvents() {
+        const q = document.getElementById("search-events").value.toLowerCase();
+        const timeFilter = document.getElementById("filter-time").value;
+        const now = new Date().toISOString().split("T")[0];
+
+        let filtered = allEvents.filter((e) => {
+          const matchQ =
+            !q ||
+            e.title.toLowerCase().includes(q) ||
+            (e.description || "").toLowerCase().includes(q) ||
+            (e.location || "").toLowerCase().includes(q);
+          const matchTime =
+            timeFilter === "all"
+              ? true
+              : timeFilter === "upcoming"
+                ? e.date >= now
+                : e.date < now;
+          return matchQ && matchTime;
+        });
+
+        const grid = document.getElementById("events-grid");
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="empty-state"><div class="empty-state__icon">◈</div><div class="empty-state__title">No events found</div></div>`;
+          return;
+        }
+        grid.innerHTML = filtered
+          .map(
+            (e) => `
+        <div class="card event-card${e.date < now ? " card--pink" : ""}">
+          <div class="event-card__date">◈ ${e.date}${e.time ? " · " + e.time : ""}</div>
+          <div class="event-card__title">${escHtml(e.title)}</div>
+          <div style="font-size:.85rem;color:var(--text-2);margin-bottom:.75rem;">${escHtml(truncate(e.description, 80))}</div>
+          <div class="event-card__meta">
+            ${e.location ? `<span>📍 ${escHtml(e.location)}</span>` : ""}
+            ${e.maxParticipants ? `<span>👥 Max ${e.maxParticipants}</span>` : ""}
+          </div>
+          <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap;">
+            <a href="event-details.html?id=${e.eventId}" class="btn btn--ghost btn--sm">View Details</a>
+            ${
+              e.createdBy === user.uid
+                ? `
+              <button class="btn btn--ghost btn--sm" onclick="openEdit('${e.eventId}')">Edit</button>
+              <button class="btn btn--danger btn--sm" onclick="confirmDelete('${e.eventId}')">Delete</button>
+            `
+                : ""
+            }
+          </div>
+        </div>
+      `,
+          )
+          .join("");
+      }
+
+      // Modal
+      const modal = document.getElementById("event-modal");
+      function openModal() {
+        modal.classList.add("form-modal--show");
+      }
+      function closeModal() {
+        modal.classList.remove("form-modal--show");
+        clearForm();
+        editingId = null;
+      }
+
+      function clearForm() {
+        ["ev-title", "ev-desc", "ev-date", "ev-time", "ev-location"].forEach(
+          (id) => (document.getElementById(id).value = ""),
+        );
+        document.getElementById("ev-max").value = "0";
+        document.getElementById("ev-team").value = "";
+      }
+
+      document.getElementById("btn-create-event").onclick = () => {
+        editingId = null;
+        document.getElementById("event-modal-title").textContent =
+          "◈ CREATE EVENT";
+        clearForm();
+        openModal();
+      };
+      document.getElementById("event-modal-close").onclick = closeModal;
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      window.openEdit = (id) => {
+        const ev = allEvents.find((e) => e.eventId === id);
+        if (!ev) return;
+        editingId = id;
+        document.getElementById("event-modal-title").textContent =
+          "◈ EDIT EVENT";
+        document.getElementById("ev-title").value = ev.title || "";
+        document.getElementById("ev-desc").value = ev.description || "";
+        document.getElementById("ev-date").value = ev.date || "";
+        document.getElementById("ev-time").value = ev.time || "";
+        document.getElementById("ev-location").value = ev.location || "";
+        document.getElementById("ev-max").value = ev.maxParticipants || 0;
+        document.getElementById("ev-team").value = ev.teamId || "";
+        openModal();
+      };
+
+      window.confirmDelete = (id) => {
+        showConfirm(
+          "Delete Event",
+          "This action cannot be undone. Delete this event?",
+          async () => {
+            try {
+              await deleteEvent(id);
+              showToast("Event deleted.", "success");
+              await loadEvents();
+            } catch (e) {
+              showToast(e.message, "error");
+            }
+          },
+        );
+      };
+
+      document.getElementById("btn-save-event").onclick = async () => {
+        try {
+          const title = required(
+            document.getElementById("ev-title").value,
+            "Title",
+          );
+          const date = required(
+            document.getElementById("ev-date").value,
+            "Date",
+          );
+          const data = {
+            title,
+            date,
+            description: document.getElementById("ev-desc").value.trim(),
+            time: document.getElementById("ev-time").value,
+            location: document.getElementById("ev-location").value.trim(),
+            maxParticipants:
+              parseInt(document.getElementById("ev-max").value) || 0,
+            teamId: document.getElementById("ev-team").value,
+          };
+          if (editingId) {
+            await updateEvent(editingId, data);
+            showToast("Event updated!", "success");
+          } else {
+            await createEvent(user.uid, data);
+            showToast("Event created!", "success");
+          }
+          closeModal();
+          await loadEvents();
+        } catch (e) {
+          showToast(e.message, "error");
+        }
+      };
+
+      // Search & filter
+      document
+        .getElementById("search-events")
+        .addEventListener("input", debounce(renderEvents, 250));
+      document
+        .getElementById("filter-time")
+        .addEventListener("change", renderEvents);
+
+      // Load teams for select
+      async function loadTeams() {
+        const teams = await getUserTeams(user.uid);
+        const sel = document.getElementById("ev-team");
+        teams.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t.teamId;
+          opt.textContent = t.name;
+          sel.appendChild(opt);
+        });
+      }
+
+      await Promise.all([
+        loadEvents().catch((e) => {
+          showToast("Could not load events: " + e.message, "error");
+          console.error(e);
+        }),
+        loadTeams().catch((e) => {
+          console.warn("Could not load teams for select:", e.message);
+        }),
+      ]);
+    </script>
+  </body>
+</html>

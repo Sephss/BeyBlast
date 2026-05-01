@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeyBlast — Dashboard</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="arena-ring"></div>
+    <nav class="nav" id="main-nav"></nav>
+
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">BATTLE <span>ARENA</span></div>
+          <div class="page-sub" id="dash-greeting">Welcome back, Blader!</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
+          <a href="events.html" class="btn btn--primary btn--sm">+ New Event</a>
+          <a href="teams.html" class="btn btn--ghost btn--sm">+ New Team</a>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row" id="dash-stats">
+        <div class="stat-tile">
+          <div class="stat-tile__num" id="stat-events">—</div>
+          <div class="stat-tile__label">My Events</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile__num" id="stat-teams">—</div>
+          <div class="stat-tile__label">My Teams</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile__num" id="stat-upcoming">—</div>
+          <div class="stat-tile__label">Upcoming</div>
+        </div>
+      </div>
+
+      <!-- Upcoming Events -->
+      <div class="section">
+        <div class="section-title">◈ Upcoming Events</div>
+        <div class="grid grid--2" id="dash-events">
+          <div class="empty-state">
+            <div class="bb-spinner" style="margin: 0 auto"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- My Teams -->
+      <div class="section">
+        <div class="section-title">⬢ My Teams</div>
+        <div class="grid grid--3" id="dash-teams">
+          <div class="empty-state">
+            <div class="bb-spinner" style="margin: 0 auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { requireAuth } from "./js/auth.js";
+      import { renderNav } from "./js/nav.js";
+      import { getUserProfile } from "./js/profile.js";
+      import { getUpcomingEvents, getUserEvents } from "./js/events.js";
+      import { getUserTeams } from "./js/teams.js";
+      import {
+        formatDateTime,
+        escHtml,
+        avatarFallback,
+        truncate,
+      } from "./js/ui.js";
+
+      console.log("Waiting for auth...");
+      const user = await requireAuth();
+      console.log("User loaded:", user.uid);
+      await renderNav("dashboard");
+
+      const profile = await getUserProfile(user.uid);
+      document.getElementById("dash-greeting").textContent =
+        `Welcome back, ${profile?.name || user.displayName || "Blader"}!`;
+
+      // Load data in parallel
+      let upcoming = [];
+      let myEvents = [];
+      let myTeams = [];
+
+      try {
+        [upcoming, myEvents, myTeams] = await Promise.all([
+          getUpcomingEvents(6),
+          getUserEvents(user.uid),
+          getUserTeams(user.uid),
+        ]);
+      } catch (err) {
+        console.error("Dashboard load error:", err);
+      }
+      // Stats
+      document.getElementById("stat-events").textContent = myEvents.length;
+      document.getElementById("stat-teams").textContent = myTeams.length;
+      document.getElementById("stat-upcoming").textContent = upcoming.length;
+
+      // Upcoming events
+      const evGrid = document.getElementById("dash-events");
+      if (upcoming.length === 0) {
+        evGrid.innerHTML = `<div class="empty-state"><div class="empty-state__icon">◈</div><div class="empty-state__title">No upcoming events</div><p><a href="events.html" class="btn btn--primary btn--sm">Browse Events</a></p></div>`;
+      } else {
+        evGrid.innerHTML = upcoming
+          .map(
+            (e) => `
+        <div class="card event-card" onclick="location.href='event-details.html?id=${e.eventId}'">
+          <div class="event-card__date">◈ ${e.date}${e.time ? " · " + e.time : ""}</div>
+          <div class="event-card__title">${escHtml(e.title)}</div>
+          <div style="font-size:.85rem;color:var(--text-2);margin-bottom:.5rem;">${escHtml(truncate(e.description, 70))}</div>
+          <div class="event-card__meta">
+            ${e.location ? `<span>📍 ${escHtml(e.location)}</span>` : ""}
+            ${e.maxParticipants ? `<span>👥 Max ${e.maxParticipants}</span>` : ""}
+          </div>
+        </div>
+      `,
+          )
+          .join("");
+      }
+
+      // My teams
+      const tmGrid = document.getElementById("dash-teams");
+      if (myTeams.length === 0) {
+        tmGrid.innerHTML = `<div class="empty-state"><div class="empty-state__icon">⬢</div><div class="empty-state__title">No teams yet</div><p><a href="teams.html" class="btn btn--ghost btn--sm">Browse Teams</a></p></div>`;
+      } else {
+        tmGrid.innerHTML = myTeams
+          .map(
+            (t) => `
+        <div class="card team-card" onclick="location.href='team-details.html?id=${t.teamId}'">
+          ${
+            t.image
+              ? `<img src="${escHtml(t.image)}" class="team-card__img" alt="${escHtml(t.name)}" onerror="this.style.display='none'" />`
+              : `<div class="team-img-placeholder">⬢</div>`
+          }
+          <div class="team-card__name">${escHtml(t.name)}</div>
+          <div class="team-card__desc">${escHtml(truncate(t.description, 60))}</div>
+        </div>
+      `,
+          )
+          .join("");
+      }
+    </script>
+  </body>
+</html>

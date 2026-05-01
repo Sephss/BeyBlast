@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeyBlast — Profile</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="arena-ring"></div>
+    <nav class="nav" id="main-nav"></nav>
+
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">◉ MY <span>PROFILE</span></div>
+          <div class="page-sub">Your blader identity</div>
+        </div>
+      </div>
+
+      <div id="profile-content">
+        <div class="empty-state">
+          <div class="bb-spinner" style="margin: 0 auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div class="form-modal" id="edit-modal">
+      <div class="form-modal__box">
+        <button class="form-modal__close" id="edit-modal-close">✕</button>
+        <div class="form-modal__title">◉ EDIT PROFILE</div>
+        <div class="form-group">
+          <label class="form-label">Display Name *</label>
+          <input
+            type="text"
+            class="form-input"
+            id="prof-name"
+            placeholder="Your name..."
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Photo URL (optional)</label>
+          <input
+            type="url"
+            class="form-input"
+            id="prof-photo"
+            placeholder="https://..."
+          />
+        </div>
+        <button class="btn btn--primary btn--full" id="btn-save-profile">
+          Save Changes
+        </button>
+      </div>
+    </div>
+
+    <script type="module">
+      import { requireAuth } from "./js/auth.js";
+      import { renderNav } from "./js/nav.js";
+      import { getUserProfile, updateUserProfile } from "./js/profile.js";
+      import { getUserEvents, getEventsCreatedBy } from "./js/events.js";
+      import { getUserTeams, getTeamsCreatedBy } from "./js/teams.js";
+      import { showToast, escHtml, avatarFallback, truncate } from "./js/ui.js";
+      import { required } from "./js/helpers.js";
+
+      const user = await requireAuth();
+      await renderNav("profile");
+
+      async function render() {
+        const [profile, joinedEvents, myTeams, createdEvents] =
+          await Promise.all([
+            getUserProfile(user.uid),
+            getUserEvents(user.uid),
+            getUserTeams(user.uid),
+            getEventsCreatedBy(user.uid),
+          ]);
+
+        const photo =
+          profile?.photo ||
+          user.photoURL ||
+          avatarFallback(profile?.name || "?");
+        const now = new Date().toISOString().split("T")[0];
+
+        document.getElementById("profile-content").innerHTML = `
+        <div class="profile-hero">
+          <img src="${photo}" class="avatar avatar--xl" alt="avatar" onerror="this.src='${avatarFallback(profile?.name || "?")}'" id="prof-photo-display" />
+          <div>
+            <div class="profile-hero__name">${escHtml(profile?.name || user.displayName || "Blader")}</div>
+            <div class="profile-hero__email">${escHtml(profile?.email || user.email || "")}</div>
+            <div class="profile-hero__badge">
+              <span class="badge badge--gold">✦ Blader</span>
+            </div>
+            <button class="btn btn--ghost btn--sm" style="margin-top:.75rem;" id="btn-edit-profile">Edit Profile</button>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-tile"><div class="stat-tile__num">${joinedEvents.length}</div><div class="stat-tile__label">Events Joined</div></div>
+          <div class="stat-tile"><div class="stat-tile__num">${myTeams.length}</div><div class="stat-tile__label">Teams</div></div>
+          <div class="stat-tile"><div class="stat-tile__num">${createdEvents.length}</div><div class="stat-tile__label">Created</div></div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn tab-btn--active" data-tab="events">My Events</button>
+          <button class="tab-btn" data-tab="teams">My Teams</button>
+          <button class="tab-btn" data-tab="created">Created Events</button>
+        </div>
+
+        <div class="tab-panel tab-panel--active" id="tab-events">
+          ${
+            joinedEvents.length === 0
+              ? `<div class="empty-state"><div class="empty-state__icon">◈</div><div class="empty-state__title">No events joined yet</div><p><a href="events.html" class="btn btn--primary btn--sm">Browse Events</a></p></div>`
+              : `<div class="grid grid--2">
+              ${joinedEvents
+                .map(
+                  (e) => `
+                <div class="card event-card${e.date < now ? " card--pink" : ""}" onclick="location.href='event-details.html?id=${e.eventId}'">
+                  <div class="event-card__date">◈ ${e.date}</div>
+                  <div class="event-card__title">${escHtml(e.title)}</div>
+                  <div style="font-size:.85rem;color:var(--text-2);">${escHtml(truncate(e.description, 60))}</div>
+                  <div class="event-card__meta">${e.location ? `<span>📍 ${escHtml(e.location)}</span>` : ""}</div>
+                </div>
+              `,
+                )
+                .join("")}
+            </div>`
+          }
+        </div>
+
+        <div class="tab-panel" id="tab-teams">
+          ${
+            myTeams.length === 0
+              ? `<div class="empty-state"><div class="empty-state__icon">⬢</div><div class="empty-state__title">No teams yet</div><p><a href="teams.html" class="btn btn--ghost btn--sm">Browse Teams</a></p></div>`
+              : `<div class="grid grid--3">
+              ${myTeams
+                .map(
+                  (t) => `
+                <div class="card team-card" onclick="location.href='team-details.html?id=${t.teamId}'">
+                  ${t.image ? `<img src="${escHtml(t.image)}" class="team-card__img" onerror="this.style.display='none'" />` : `<div class="team-img-placeholder">⬢</div>`}
+                  <div class="team-card__name">${escHtml(t.name)}</div>
+                  <div class="team-card__desc">${escHtml(truncate(t.description, 50))}</div>
+                </div>
+              `,
+                )
+                .join("")}
+            </div>`
+          }
+        </div>
+
+        <div class="tab-panel" id="tab-created">
+          ${
+            createdEvents.length === 0
+              ? `<div class="empty-state"><div class="empty-state__icon">◈</div><div class="empty-state__title">No events created yet</div><p><a href="events.html" class="btn btn--primary btn--sm">Create Event</a></p></div>`
+              : `<div class="grid grid--2">
+              ${createdEvents
+                .map(
+                  (e) => `
+                <div class="card event-card${e.date < now ? " card--pink" : ""}" onclick="location.href='event-details.html?id=${e.eventId}'">
+                  <div class="event-card__date">◈ ${e.date}</div>
+                  <div class="event-card__title">${escHtml(e.title)}</div>
+                  <div style="font-size:.85rem;color:var(--text-2);">${escHtml(truncate(e.description, 60))}</div>
+                </div>
+              `,
+                )
+                .join("")}
+            </div>`
+          }
+        </div>
+      `;
+
+        // Tabs
+        document.querySelectorAll(".tab-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document
+              .querySelectorAll(".tab-btn")
+              .forEach((b) => b.classList.remove("tab-btn--active"));
+            document
+              .querySelectorAll(".tab-panel")
+              .forEach((p) => p.classList.remove("tab-panel--active"));
+            btn.classList.add("tab-btn--active");
+            document
+              .getElementById(`tab-${btn.dataset.tab}`)
+              .classList.add("tab-panel--active");
+          });
+        });
+
+        document
+          .getElementById("btn-edit-profile")
+          .addEventListener("click", () => {
+            document.getElementById("prof-name").value = profile?.name || "";
+            document.getElementById("prof-photo").value = profile?.photo || "";
+            document
+              .getElementById("edit-modal")
+              .classList.add("form-modal--show");
+          });
+      }
+
+      // Edit modal
+      const editModal = document.getElementById("edit-modal");
+      document.getElementById("edit-modal-close").onclick = () =>
+        editModal.classList.remove("form-modal--show");
+      editModal.addEventListener("click", (e) => {
+        if (e.target === editModal)
+          editModal.classList.remove("form-modal--show");
+      });
+
+      document.getElementById("btn-save-profile").onclick = async () => {
+        try {
+          const name = required(
+            document.getElementById("prof-name").value,
+            "Name",
+          );
+          const photo = document.getElementById("prof-photo").value.trim();
+          await updateUserProfile(user.uid, { name, photo });
+          showToast("Profile updated!", "success");
+          editModal.classList.remove("form-modal--show");
+          await render();
+          await renderNav("profile");
+        } catch (e) {
+          showToast(e.message, "error");
+        }
+      };
+
+      await render();
+    </script>
+  </body>
+</html>

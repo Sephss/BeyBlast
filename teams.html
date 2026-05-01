@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeyBlast — Teams</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="arena-ring"></div>
+    <nav class="nav" id="main-nav"></nav>
+
+    <div class="page-wrap">
+      <div class="page-header">
+        <div>
+          <div class="page-title">⬢ BATTLE <span>TEAMS</span></div>
+          <div class="page-sub">Find your crew or forge a new alliance</div>
+        </div>
+        <button class="btn btn--primary" id="btn-create-team">
+          + Create Team
+        </button>
+      </div>
+
+      <div class="filter-row">
+        <div class="search-bar" style="max-width: 340px">
+          <span class="search-bar__icon">🔍</span>
+          <input type="text" placeholder="Search teams..." id="search-teams" />
+        </div>
+      </div>
+
+      <div class="grid grid--3" id="teams-grid">
+        <div class="empty-state">
+          <div class="bb-spinner" style="margin: 0 auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create / Edit Team Modal -->
+    <div class="form-modal" id="team-modal">
+      <div class="form-modal__box">
+        <button class="form-modal__close" id="team-modal-close">✕</button>
+        <div class="form-modal__title" id="team-modal-title">⬢ CREATE TEAM</div>
+        <div class="form-group">
+          <label class="form-label">Team Name *</label>
+          <input
+            type="text"
+            class="form-input"
+            id="tm-name"
+            placeholder="Dark Nebula..."
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea
+            class="form-textarea"
+            id="tm-desc"
+            placeholder="About your team..."
+          ></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Team Image URL (optional)</label>
+          <input
+            type="url"
+            class="form-input"
+            id="tm-image"
+            placeholder="https://..."
+          />
+        </div>
+        <button class="btn btn--primary btn--full" id="btn-save-team">
+          Save Team
+        </button>
+      </div>
+    </div>
+
+    <script type="module">
+      import { requireAuth } from "./js/auth.js";
+      import { renderNav } from "./js/nav.js";
+      import {
+        getAllTeams,
+        createTeam,
+        updateTeam,
+        deleteTeam,
+        isMember,
+      } from "./js/teams.js";
+      import { showToast, showConfirm, escHtml, truncate } from "./js/ui.js";
+      import { debounce, required } from "./js/helpers.js";
+
+      window.addEventListener("unhandledrejection", (e) => {
+        console.error("Unhandled promise rejection:", e.reason);
+        showToast("Error: " + (e.reason?.message || "Unknown error"), "error");
+      });
+
+      const user = await requireAuth();
+      await renderNav("teams");
+
+      let allTeams = [];
+      let editingId = null;
+
+      async function loadTeams() {
+        allTeams = await getAllTeams();
+        await renderTeams();
+      }
+
+      async function renderTeams() {
+        const q = document.getElementById("search-teams").value.toLowerCase();
+        let filtered = allTeams.filter(
+          (t) =>
+            !q ||
+            t.name.toLowerCase().includes(q) ||
+            (t.description || "").toLowerCase().includes(q),
+        );
+
+        const grid = document.getElementById("teams-grid");
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="empty-state"><div class="empty-state__icon">⬢</div><div class="empty-state__title">No teams found</div></div>`;
+          return;
+        }
+
+        // Check membership for all teams
+        const memberChecks = await Promise.all(
+          filtered.map((t) => isMember(t.teamId, user.uid)),
+        );
+
+        grid.innerHTML = filtered
+          .map((t, i) => {
+            const joined = memberChecks[i];
+            return `
+        <div class="card team-card">
+          ${
+            t.image
+              ? `<img src="${escHtml(t.image)}" class="team-card__img" alt="${escHtml(t.name)}" onerror="this.style.display='none'" />`
+              : `<div class="team-img-placeholder">⬢</div>`
+          }
+          <div class="team-card__name">${escHtml(t.name)}</div>
+          <div class="team-card__desc">${escHtml(truncate(t.description, 60))}</div>
+          ${joined ? '<span class="badge badge--cyan" style="margin-bottom:.5rem;">✦ Member</span>' : ""}
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem;">
+            <a href="team-details.html?id=${t.teamId}" class="btn btn--ghost btn--sm">View</a>
+            ${
+              t.createdBy === user.uid
+                ? `
+              <button class="btn btn--ghost btn--sm" onclick="openEdit('${t.teamId}')">Edit</button>
+              <button class="btn btn--danger btn--sm" onclick="confirmDelete('${t.teamId}')">Delete</button>
+            `
+                : ""
+            }
+          </div>
+        </div>
+      `;
+          })
+          .join("");
+      }
+
+      // Modal
+      const modal = document.getElementById("team-modal");
+      function openModal() {
+        modal.classList.add("form-modal--show");
+      }
+      function closeModal() {
+        modal.classList.remove("form-modal--show");
+        clearForm();
+        editingId = null;
+      }
+
+      function clearForm() {
+        ["tm-name", "tm-desc", "tm-image"].forEach(
+          (id) => (document.getElementById(id).value = ""),
+        );
+      }
+
+      document.getElementById("btn-create-team").onclick = () => {
+        editingId = null;
+        document.getElementById("team-modal-title").textContent =
+          "⬢ CREATE TEAM";
+        clearForm();
+        openModal();
+      };
+      document.getElementById("team-modal-close").onclick = closeModal;
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      window.openEdit = (id) => {
+        const t = allTeams.find((t) => t.teamId === id);
+        if (!t) return;
+        editingId = id;
+        document.getElementById("team-modal-title").textContent = "⬢ EDIT TEAM";
+        document.getElementById("tm-name").value = t.name || "";
+        document.getElementById("tm-desc").value = t.description || "";
+        document.getElementById("tm-image").value = t.image || "";
+        openModal();
+      };
+
+      window.confirmDelete = (id) => {
+        showConfirm(
+          "Delete Team",
+          "This will remove the team and all memberships. Continue?",
+          async () => {
+            try {
+              await deleteTeam(id);
+              showToast("Team deleted.", "success");
+              await loadTeams();
+            } catch (e) {
+              showToast(e.message, "error");
+            }
+          },
+        );
+      };
+
+      document.getElementById("btn-save-team").onclick = async () => {
+        try {
+          const name = required(
+            document.getElementById("tm-name").value,
+            "Team Name",
+          );
+          const data = {
+            name,
+            description: document.getElementById("tm-desc").value.trim(),
+            image: document.getElementById("tm-image").value.trim(),
+          };
+          if (editingId) {
+            await updateTeam(editingId, data);
+            showToast("Team updated!", "success");
+          } else {
+            await createTeam(user.uid, data);
+            showToast("Team created!", "success");
+          }
+          closeModal();
+          await loadTeams();
+        } catch (e) {
+          showToast(e.message, "error");
+        }
+      };
+
+      document
+        .getElementById("search-teams")
+        .addEventListener("input", debounce(renderTeams, 250));
+
+      await loadTeams().catch((e) => {
+        showToast("Could not load teams: " + e.message, "error");
+        console.error(e);
+        document.getElementById("teams-grid").innerHTML =
+          `<div class="empty-state"><div class="empty-state__icon">⬢</div><div class="empty-state__title">Failed to load teams</div><p style="font-size:.85rem;color:var(--red);">${e.message}</p></div>`;
+      });
+    </script>
+  </body>
+</html>
